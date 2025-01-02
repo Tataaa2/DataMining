@@ -1,7 +1,7 @@
 streamlit==1.41.1
 pandas==2.2.3
-numpy==2.2.1
-mlxtend==0.23.3
-scikit-learn==1.2.2
-matplotlib==3.10.0
-threadpoolctl==3.1.0
+numpy==1.21.6
+mlxtend==0.23.0
+scikit-learn==0.24.2
+matplotlib==3.3.4
+joblib==1.1.0

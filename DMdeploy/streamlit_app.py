@@ -1,35 +1,28 @@
-# Import Libraries
+# 1. Import Library
+import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from mlxtend.preprocessing import TransactionEncoder
 from mlxtend.frequent_patterns import apriori, association_rules
-import streamlit as st
 
-# Header Aplikasi
-st.title("Analisis Transaksi dengan Algoritma Apriori")
-st.markdown("Upload dataset transaksi Anda untuk melakukan analisis menggunakan algoritma Apriori dan menemukan aturan asosiasi.")
+# 2. Judul Aplikasi
+st.title("Aplikasi Analisis Aturan Asosiasi")
 
-# Upload Dataset
-uploaded_file = st.file_uploader("Upload CSV File", type="csv")
-
-if uploaded_file is not None:
-    # Baca Dataset
+# 3. Upload Dataset
+uploaded_file = st.file_uploader("Unggah file dataset (CSV)", type="csv")
+if uploaded_file:
+    # 4. Baca Dataset
     data = pd.read_csv(uploaded_file, delimiter=';', decimal=',', low_memory=False)
     st.subheader("Data Awal:")
-    st.dataframe(data.head())
+    st.write(data.head())
 
-    # Bersihkan Data
-    st.subheader("Cek Missing Values:")
-    st.write(data.isnull().sum())
-
-    # Drop baris dengan nilai kosong di kolom CustomerID dan Itemname
+    # 5. Bersihkan Data
+    st.subheader("Pembersihan Data")
     data = data.dropna(subset=['CustomerID', 'Itemname'])
+    st.write("Data setelah menghapus nilai kosong:", data.head())
 
-    # Normalisasi kolom Itemname
-    data['Itemname'] = data['Itemname'].astype(str).str.strip()
-
-    # Gabungkan Item Berdasarkan BillNo
+    # 6. Gabungkan Item Berdasarkan BillNo
     data = data.groupby(['BillNo']).agg({
         'Itemname': lambda x: list(x),
         'Quantity': 'sum',
@@ -38,67 +31,66 @@ if uploaded_file is not None:
         'CustomerID': 'first',
         'Country': 'first'
     }).reset_index()
-
     st.subheader("Data Setelah Penggabungan:")
-    st.dataframe(data.head())
+    st.write(data.head())
 
-    # Konversi Kolom Date ke Format Datetime
-    data['Date'] = pd.to_datetime(data['Date'], format='%d.%m.%Y %H:%M', errors='coerce')
+    # 7. Konversi Kolom Date ke Format Datetime
+    data['Date'] = pd.to_datetime(data['Date'], format='%d.%m.%Y %H:%M')
     data['Year'] = data['Date'].dt.year
 
     # Filter Data Tahun Terbaru
     latest_year = data['Year'].max()
     data = data[data['Year'] == latest_year]
     st.subheader(f"Data Tahun Terbaru ({latest_year}):")
-    st.dataframe(data.head())
+    st.write(data.head())
 
-    # One-Hot Encoding untuk Item Transaksi
+    # 8. One-Hot Encoding untuk Item Transaksi
     te = TransactionEncoder()
     basket_encoded = te.fit(data['Itemname']).transform(data['Itemname'])
     basket_encoded = pd.DataFrame(basket_encoded, columns=te.columns_)
+    st.subheader("Data Setelah One-Hot Encoding:")
+    st.write(basket_encoded.head())
 
-    # Jalankan Algoritma Apriori
-    min_support = st.slider("Pilih Nilai Minimum Support:", 0.01, 0.1, 0.01)
+    # 9. Parameter Minimum Support
+    min_support = st.slider("Pilih Support Minimum", 0.01, 0.1, 0.05)
+
+    # 10. Menjalankan Algoritma Apriori
     frequent_itemsets = apriori(basket_encoded, min_support=min_support, use_colnames=True)
+    st.subheader("Frequent Itemsets:")
+    st.write(frequent_itemsets)
 
-    if frequent_itemsets.empty:
-        st.error("Tidak ada frequent itemsets yang ditemukan. Coba turunkan nilai minimum support.")
+    # 11. Menentukan Aturan Asosiasi
+    rules = association_rules(frequent_itemsets, metric="lift", min_threshold=1.0, num_itemsets=len(frequent_itemsets))
+    st.subheader("Aturan Asosiasi:")
+    st.write(rules)
+
+    # 12. Evaluasi Akurasi (Rata-rata Confidence)
+    if not rules.empty:
+        average_confidence = rules['confidence'].mean()
+        st.write(f"Rata-rata Confidence (Akurasi): {average_confidence:.2%}")
     else:
-        # Tampilkan Frequent Itemsets
-        frequent_itemsets['itemsets'] = frequent_itemsets['itemsets'].apply(lambda x: ', '.join(sorted(list(x))))
-        st.subheader("Frequent Itemsets:")
-        st.dataframe(frequent_itemsets)
+        st.write("Tidak ada aturan asosiasi yang ditemukan.")
 
-        # Menentukan Aturan Asosiasi
-        rules = association_rules(frequent_itemsets, metric="lift", min_threshold=1.0)
+    # 13. Visualisasi Distribusi Support, Confidence, dan Lift
+    st.subheader("Visualisasi Distribusi Support, Confidence, dan Lift")
+    fig, axs = plt.subplots(1, 3, figsize=(15, 5))
 
-        if rules.empty:
-            st.warning("Tidak ada aturan asosiasi yang ditemukan.")
-        else:
-            st.subheader("Aturan Asosiasi:")
-            st.dataframe(rules)
+    # Support
+    axs[0].hist(rules['support'], bins=10, edgecolor='black')
+    axs[0].set_title('Distribusi Support')
+    axs[0].set_xlabel('Support')
+    axs[0].set_ylabel('Frekuensi')
 
-            # Visualisasi Distribusi
-            st.subheader("Visualisasi Distribusi Support, Confidence, dan Lift")
-            fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    # Confidence
+    axs[1].hist(rules['confidence'], bins=10, edgecolor='black')
+    axs[1].set_title('Distribusi Confidence')
+    axs[1].set_xlabel('Confidence')
+    axs[1].set_ylabel('Frekuensi')
 
-            # Support
-            axes[0].hist(rules['support'], bins=10, edgecolor='black')
-            axes[0].set_title('Distribusi Support')
-            axes[0].set_xlabel('Support')
-            axes[0].set_ylabel('Frekuensi')
+    # Lift
+    axs[2].hist(rules['lift'], bins=10, edgecolor='black')
+    axs[2].set_title('Distribusi Lift')
+    axs[2].set_xlabel('Lift')
+    axs[2].set_ylabel('Frekuensi')
 
-            # Confidence
-            axes[1].hist(rules['confidence'], bins=10, edgecolor='black')
-            axes[1].set_title('Distribusi Confidence')
-            axes[1].set_xlabel('Confidence')
-            axes[1].set_ylabel('Frekuensi')
-
-            # Lift
-            axes[2].hist(rules['lift'], bins=10, edgecolor='black')
-            axes[2].set_title('Distribusi Lift')
-            axes[2].set_xlabel('Lift')
-            axes[2].set_ylabel('Frekuensi')
-
-            plt.tight_layout()
-            st.pyplot(fig)
+    st.pyplot(fig)
